@@ -4,6 +4,12 @@ const User = require("./user");
 const { auth } = require("./auth");
 
 const router = express.Router();
+const normBG = (s) =>
+  String(s || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[\u2010-\u2015\u2212]/g, "-")
+    .replace(/\s+/g, "");
 
 const publicRequest = (r) => ({
   id: r._id,
@@ -81,18 +87,21 @@ router.get("/mine", auth, async (req, res) => {
 router.get("/donor", auth, async (req, res) => {
   try {
     const me = await User.findById(req.userId);
-    const bloodGroup = me?.donor?.bloodGroup;
+    const bloodGroup = normBG(me?.donor?.bloodGroup);
     if (!bloodGroup)
       return res.status(400).json({ message: "Please complete your donor profile first" });
 
-    const list = await Request.find({
-      bloodGroup,
+    const all = await Request.find({
       receiver: { $ne: req.userId },
       declinedBy: { $ne: req.userId },
       $or: [{ status: "Pending" }, { acceptedBy: req.userId }],
     })
       .populate("receiver", "name email")
       .sort({ createdAt: -1 });
+
+    const list = all.filter((r) => normBG(r.bloodGroup) === bloodGroup);
+
+    console.log("DONOR REQ:", me.email, bloodGroup, "candidates:", all.length, "matched:", list.length);
 
     res.json({ requests: list.map((r) => toItem(r, req.userId)) });
   } catch (err) {
