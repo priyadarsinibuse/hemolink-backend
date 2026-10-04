@@ -13,6 +13,7 @@ const publicUser = (user) => ({
   name: user.name,
   email: user.email,
   role: user.role,
+  donor: user.donor,
 });
 
 const auth = (req, res, next) => {
@@ -75,6 +76,46 @@ router.put("/role", auth, async (req, res) => {
       return res.status(400).json({ message: "Invalid role" });
 
     const user = await User.findByIdAndUpdate(req.userId, { role }, { new: true });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    res.json({ user: publicUser(user) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+router.get("/me", auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json({ user: publicUser(user) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+router.put("/donor-profile", auth, async (req, res) => {
+  try {
+    const fields = [
+      "dob", "bloodGroup", "gender", "weight", "phone",
+      "house", "street", "city", "state", "pincode",
+      "lastDonationDate", "firstTime", "chronicIllness",
+      "medication", "tattooRecent",
+    ];
+
+    const set = { role: "donor", "donor.completed": true };
+    for (const f of fields) {
+      if (req.body[f] !== undefined) set[`donor.${f}`] = req.body[f];
+    }
+    if (req.body.fullName && req.body.fullName.trim()) {
+      set.name = req.body.fullName.trim();
+    }
+
+    if (!req.body.bloodGroup || !req.body.phone || !req.body.city)
+      return res.status(400).json({ message: "Blood group, phone and city are required" });
+
+    const user = await User.findByIdAndUpdate(req.userId, { $set: set }, { new: true });
     if (!user) return res.status(404).json({ message: "User not found" });
 
     res.json({ user: publicUser(user) });
