@@ -126,3 +126,4 @@ router.put("/donor-profile", auth, async (req, res) => {
 });
 
 module.exports = router;
+module.exports.auth = auth;
