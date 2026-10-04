@@ -10,6 +10,8 @@ const requestSchema = new mongoose.Schema(
     urgency: { type: String, enum: ["Normal", "Urgent", "Immediate"], default: "Normal" },
     message: { type: String, default: "" },
     status: { type: String, enum: ["Pending", "Accepted", "Declined"], default: "Pending" },
+    acceptedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    declinedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   },
   { timestamps: true }
 );

@@ -1,6 +1,6 @@
-
 const express = require("express");
 const Request = require("./request");
+const User = require("./user");
 const { auth } = require("./auth");
 
 const router = express.Router();
@@ -16,6 +16,28 @@ const publicRequest = (r) => ({
   status: r.status,
   createdAt: r.createdAt,
 });
+
+// Donor ki chupinche format (contact details accept chesaka matrame)
+const toItem = (r, userId) => {
+  const mine = r.acceptedBy && String(r.acceptedBy) === String(userId);
+  const item = {
+    id: r._id,
+    bloodGroup: r.bloodGroup,
+    units: r.units,
+    urgency: r.urgency,
+    hospital: r.address,
+    patientName: r.patientName,
+    message: r.message,
+    postedAt: r.createdAt,
+    status: mine ? "accepted" : null,
+  };
+  if (mine && r.receiver) {
+    item.receiverName = r.receiver.name;
+    item.receiverEmail = r.receiver.email;
+    item.receiverPhone = r.receiver.phone || "Not provided";
+  }
+  return item;
+};
 
 // Receiver kotta request pampadam
 router.post("/", auth, async (req, res) => {
@@ -55,19 +77,33 @@ router.get("/mine", auth, async (req, res) => {
   }
 });
 
-// Donors anni Pending requests chudadam
-router.get("/", auth, async (req, res) => {
+// Donor ki tana blood group match ayye requests
+router.get("/donor", auth, async (req, res) => {
   try {
-    const filter = { status: "Pending" };
+    const me = await User.findById(req.userId);
+    const bloodGroup = me?.donor?.bloodGroup;
+    if (!bloodGroup)
+      return res.status(400).json({ message: "Please complete your donor profile first" });
 
-    // TODO (nee mini task): bloodGroup, urgency filters ikkada add cheyyi
+    const list = await Request.find({
+      bloodGroup,
+      receiver: { $ne: req.userId },
+      declinedBy: { $ne: req.userId },
+      $or: [{ status: "Pending" }, { acceptedBy: req.userId }],
+    })
+      .populate("receiver", "name email")
+      .sort({ createdAt: -1 });
 
-    const requests = await Request.find(filter).sort({ createdAt: -1 });
-    res.json({ requests: requests.map(publicRequest) });
+    res.json({ requests: list.map((r) => toItem(r, req.userId)) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
-module.exports = router;
+// Donor accept / reject
+router.put("/:id/respond", auth, async (req, res) => {
+  try {
+    const { decision } = req.body;
+    if (!["accepted", "reject"].includes(decision))
+      return res.status(400).json({ message: "Invalid
