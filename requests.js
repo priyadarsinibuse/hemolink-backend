@@ -106,4 +106,44 @@ router.put("/:id/respond", auth, async (req, res) => {
   try {
     const { decision } = req.body;
     if (!["accepted", "reject"].includes(decision))
-      return res.status(400).json({ message: "Invalid
+      return res.status(400).json({ message: "Invalid decision" });
+
+    if (decision === "reject") {
+      await Request.findByIdAndUpdate(req.params.id, {
+        $addToSet: { declinedBy: req.userId },
+      });
+      return res.json({ ok: true });
+    }
+
+    const updated = await Request.findOneAndUpdate(
+      { _id: req.params.id, status: "Pending", receiver: { $ne: req.userId } },
+      { status: "Accepted", acceptedBy: req.userId },
+      { new: true }
+    ).populate("receiver", "name email");
+
+    if (!updated)
+      return res.status(409).json({ message: "This request is no longer available" });
+
+    res.json({ request: toItem(updated, req.userId) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Anni Pending requests (optional filters: ?bloodGroup=O+&urgency=Urgent)
+router.get("/", auth, async (req, res) => {
+  try {
+    const filter = { status: "Pending" };
+    if (req.query.bloodGroup) filter.bloodGroup = req.query.bloodGroup;
+    if (req.query.urgency) filter.urgency = req.query.urgency;
+
+    const requests = await Request.find(filter).sort({ createdAt: -1 });
+    res.json({ requests: requests.map(publicRequest) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+module.exports = router;
