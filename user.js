@@ -6,7 +6,7 @@ const userSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true, minlength: 6 },
     role: { type: String, enum: ["donor", "recipient"] },
-          donor: {
+    donor: {
       dob: String,
       bloodGroup: String,
       gender: String,
@@ -23,6 +23,15 @@ const userSchema = new mongoose.Schema(
       medication: String,
       tattooRecent: String,
       available: { type: Boolean, default: true },
+      completed: { type: Boolean, default: false },
+    },
+    recipient: {
+      phone: String,
+      bloodGroup: String,
+      dob: String,
+      gender: String,
+      city: String,
+      address: String,
       completed: { type: Boolean, default: false },
     },
   },

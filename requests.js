@@ -40,7 +40,7 @@ const toItem = (r, userId) => {
   if (mine && r.receiver) {
     item.receiverName = r.receiver.name;
     item.receiverEmail = r.receiver.email;
-    item.receiverPhone = r.receiver.phone || "Not provided";
+    item.receiverPhone = r.receiver.recipient?.phone || "Not provided";
   }
   return item;
 };
@@ -96,7 +96,8 @@ router.get("/donor", auth, async (req, res) => {
       declinedBy: { $ne: req.userId },
       $or: [{ status: "Pending" }, { acceptedBy: req.userId }],
     })
-      .populate("receiver", "name email")
+      
+      .populate("receiver", "name email recipient")
       .sort({ createdAt: -1 });
 
     const list = all.filter((r) => normBG(r.bloodGroup) === bloodGroup);

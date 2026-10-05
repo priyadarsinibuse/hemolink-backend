@@ -14,6 +14,7 @@ const publicUser = (user) => ({
   email: user.email,
   role: user.role,
   donor: user.donor,
+    recipient: user.recipient,
 });
 
 const auth = (req, res, next) => {
@@ -114,6 +115,33 @@ router.put("/donor-profile", auth, async (req, res) => {
 
     if (!req.body.bloodGroup || !req.body.phone || !req.body.city)
       return res.status(400).json({ message: "Blood group, phone and city are required" });
+
+    const user = await User.findByIdAndUpdate(req.userId, { $set: set }, { new: true });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    res.json({ user: publicUser(user) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+router.put("/receiver-profile", auth, async (req, res) => {
+  try {
+    const { phone, bloodGroup, dob, gender, city, address, fullName } = req.body;
+    if (!phone || !bloodGroup || !city)
+      return res.status(400).json({ message: "Phone, blood group and city are required" });
+
+    const set = {
+      role: "recipient",
+      "recipient.completed": true,
+      "recipient.phone": phone,
+      "recipient.bloodGroup": bloodGroup,
+      "recipient.dob": dob || "",
+      "recipient.gender": gender || "",
+      "recipient.city": city,
+      "recipient.address": address || "",
+    };
+    if (fullName && fullName.trim()) set.name = fullName.trim();
 
     const user = await User.findByIdAndUpdate(req.userId, { $set: set }, { new: true });
     if (!user) return res.status(404).json({ message: "User not found" });
