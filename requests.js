@@ -11,17 +11,25 @@ const normBG = (s) =>
     .replace(/[\u2010-\u2015\u2212]/g, "-")
     .replace(/\s+/g, "");
 
-const publicRequest = (r) => ({
-  id: r._id,
-  patientName: r.patientName,
-  bloodGroup: r.bloodGroup,
-  units: r.units,
-  address: r.address,
-  urgency: r.urgency,
-  message: r.message,
-  status: r.status,
-  createdAt: r.createdAt,
-});
+// Receiver ki chupinche format (donor details populate ayite matrame)
+const publicRequest = (r) => {
+  const d = r.acceptedBy && r.acceptedBy.name ? r.acceptedBy : null;
+  return {
+    id: r._id,
+    patientName: r.patientName,
+    bloodGroup: r.bloodGroup,
+    units: r.units,
+    address: r.address,
+    urgency: r.urgency,
+    message: r.message,
+    status: r.status,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+    completedAt: r.completedAt,
+    donorName: d?.name,
+    donorPhone: d?.donor?.phone,
+  };
+};
 
 // Donor ki chupinche format (contact details accept chesaka matrame)
 const toItem = (r, userId) => {
@@ -35,7 +43,7 @@ const toItem = (r, userId) => {
     patientName: r.patientName,
     message: r.message,
     postedAt: r.createdAt,
-    status: mine ? "accepted" : null,
+    status: mine ? (r.status === "Completed" ? "completed" : "accepted") : null,
   };
   if (mine && r.receiver) {
     item.receiverName = r.receiver.name;
@@ -75,7 +83,9 @@ router.post("/", auth, async (req, res) => {
 // Receiver tana requests chudadam
 router.get("/mine", auth, async (req, res) => {
   try {
-    const requests = await Request.find({ receiver: req.userId }).sort({ createdAt: -1 });
+    const requests = await Request.find({ receiver: req.userId })
+      .populate("acceptedBy", "name donor")
+      .sort({ createdAt: -1 });
     res.json({ requests: requests.map(publicRequest) });
   } catch (err) {
     console.error(err);
@@ -96,7 +106,6 @@ router.get("/donor", auth, async (req, res) => {
       declinedBy: { $ne: req.userId },
       $or: [{ status: "Pending" }, { acceptedBy: req.userId }],
     })
-      
       .populate("receiver", "name email recipient")
       .sort({ createdAt: -1 });
 
@@ -129,12 +138,38 @@ router.put("/:id/respond", auth, async (req, res) => {
       { _id: req.params.id, status: "Pending", receiver: { $ne: req.userId } },
       { status: "Accepted", acceptedBy: req.userId },
       { new: true }
-    ).populate("receiver", "name email");
+    ).populate("receiver", "name email recipient");
 
     if (!updated)
       return res.status(409).json({ message: "This request is no longer available" });
 
     res.json({ request: toItem(updated, req.userId) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Donor "Mark as donated"
+router.put("/:id/complete", auth, async (req, res) => {
+  try {
+    const updated = await Request.findOneAndUpdate(
+      { _id: req.params.id, status: "Accepted", acceptedBy: req.userId },
+      { status: "Completed", completedAt: new Date() },
+      { new: true }
+    );
+
+    if (!updated)
+      return res
+        .status(409)
+        .json({ message: "Request is not accepted by you or already completed" });
+
+    await User.findByIdAndUpdate(req.userId, {
+      $inc: { "donor.donationsCount": 1 },
+      $set: { "donor.lastDonationDate": new Date().toISOString().slice(0, 10) },
+    });
+
+    res.json({ ok: true, status: "completed" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
